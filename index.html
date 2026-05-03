@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ghent Explorer — Interactive WebGIS</title>
+  <meta name="description" content="Interactive WebGIS exploring waterways, historic buildings, hotels and historic sites in Ghent, Belgium.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><circle cx='14' cy='14' r='13' stroke='%236366f1' stroke-width='2' fill='none'/><circle cx='14' cy='14' r='2.5' fill='%236366f1'/></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-logo">
+      <svg viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="32" r="30" stroke="#6366f1" stroke-width="2.5" opacity=".3"/>
+        <circle cx="32" cy="32" r="22" stroke="#6366f1" stroke-width="2" opacity=".5"/>
+        <path d="M18 32c0-7.7 6.3-14 14-14s14 6.3 14 14-6.3 14-14 14" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="32" cy="32" r="5" fill="#6366f1"/>
+      </svg>
+    </div>
+    <div class="loading-bar-track">
+      <div class="loading-bar-fill" id="loading-bar-fill"></div>
+    </div>
+    <div class="loading-text" id="loading-text">Initializing map...</div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <svg viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="13" stroke="#6366f1" stroke-width="2"/>
+        <path d="M8 14c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="14" cy="14" r="2.5" fill="#6366f1"/>
+      </svg>
+      Ghent Explorer
+    </div>
+
+    <!-- Search -->
+    <div class="search-container">
+      <span class="search-icon">🔍</span>
+      <input type="text" class="search-input" id="search-input" placeholder="Search places, hotels, landmarks..." autocomplete="off">
+      <div class="search-results" id="search-results"></div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-water)"></div><span id="stat-water">0</span> Waterways</div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-building)"></div><span id="stat-building">0</span> Buildings</div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-historic)"></div><span id="stat-historic">0</span> Historic</div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-hotel)"></div><span id="stat-hotel">0</span> Hotels</div>
+    </div>
+  </header>
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="icon-badge" id="sb-icon">🏛️</div>
+      <div class="meta">
+        <h2 id="sb-title">Feature Name</h2>
+        <span class="type-badge" id="sb-badge">Type</span>
+        <div id="sb-stars"></div>
+      </div>
+      <button class="close-btn" id="sb-close" aria-label="Close sidebar">✕</button>
+    </div>
+    <div class="sidebar-body" id="sb-body"></div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend-panel">
+    <h4>Map Legend</h4>
+    <div class="legend-item"><div class="line-swatch" style="background:var(--accent-water)"></div>Waterways</div>
+    <div class="legend-item"><div class="swatch" style="background:var(--accent-building);opacity:.5"></div>Notable Buildings</div>
+    <div class="legend-item"><div class="swatch" style="background:var(--accent-historic);border-radius:50%"></div>Historic Sites</div>
+    <div class="legend-item"><div class="swatch" style="background:var(--accent-hotel);border-radius:50%"></div>Hotels &amp; Accommodation</div>
+  </div>
+
+  <!-- Locate Button -->
+  <button class="locate-btn" id="locate-btn" aria-label="Find my location" title="Find my location">📍</button>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
