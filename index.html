@@ -4,10 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ghent Explorer — Interactive WebGIS</title>
-  <meta name="description" content="Interactive WebGIS exploring waterways, historic buildings, hotels and historic sites in Ghent, Belgium.">
+  <meta name="description" content="Interactive WebGIS exploring waterways, historic buildings, hotels, food, arts and tourism in Ghent, Belgium.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><circle cx='14' cy='14' r='13' stroke='%236366f1' stroke-width='2' fill='none'/><circle cx='14' cy='14' r='2.5' fill='%236366f1'/></svg>">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -36,23 +38,36 @@
         <path d="M8 14c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
         <circle cx="14" cy="14" r="2.5" fill="#6366f1"/>
       </svg>
-      Ghent Explorer
+      <span class="logo-text">Ghent Explorer</span>
     </div>
 
     <!-- Search -->
     <div class="search-container">
       <span class="search-icon">🔍</span>
-      <input type="text" class="search-input" id="search-input" placeholder="Search places, hotels, landmarks..." autocomplete="off">
+      <input type="text" class="search-input" id="search-input" placeholder="Search places, food, arts..." autocomplete="off">
       <div class="search-results" id="search-results"></div>
     </div>
 
-    <div class="stats">
-      <div class="stat-chip"><div class="dot" style="background:var(--accent-water)"></div><span id="stat-water">0</span> Waterways</div>
-      <div class="stat-chip"><div class="dot" style="background:var(--accent-building)"></div><span id="stat-building">0</span> Buildings</div>
-      <div class="stat-chip"><div class="dot" style="background:var(--accent-historic)"></div><span id="stat-historic">0</span> Historic</div>
-      <div class="stat-chip"><div class="dot" style="background:var(--accent-hotel)"></div><span id="stat-hotel">0</span> Hotels</div>
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <button class="header-btn" id="stats-toggle-btn" title="Toggle Stats">
+        <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+      </button>
     </div>
   </header>
+
+  <!-- Stats Bar (collapsible) -->
+  <div class="stats-bar" id="stats-bar">
+    <div class="stats-inner">
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-water)"></div><span id="stat-water">0</span><span class="stat-label">Waterways</span></div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-building)"></div><span id="stat-building">0</span><span class="stat-label">Buildings</span></div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-historic)"></div><span id="stat-historic">0</span><span class="stat-label">Historic</span></div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-hotel)"></div><span id="stat-hotel">0</span><span class="stat-label">Hotels</span></div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-food)"></div><span id="stat-food">0</span><span class="stat-label">Food</span></div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-art)"></div><span id="stat-art">0</span><span class="stat-label">Arts</span></div>
+      <div class="stat-chip"><div class="dot" style="background:var(--accent-info)"></div><span id="stat-info">0</span><span class="stat-label">Info</span></div>
+    </div>
+  </div>
 
   <!-- Sidebar -->
   <div class="sidebar" id="sidebar">
@@ -68,17 +83,79 @@
     <div class="sidebar-body" id="sb-body"></div>
   </div>
 
-  <!-- Legend -->
-  <div class="legend-panel">
-    <h4>Map Legend</h4>
-    <div class="legend-item"><div class="line-swatch" style="background:var(--accent-water)"></div>Waterways</div>
-    <div class="legend-item"><div class="swatch" style="background:var(--accent-building);opacity:.5"></div>Notable Buildings</div>
-    <div class="legend-item"><div class="swatch" style="background:var(--accent-historic);border-radius:50%"></div>Historic Sites</div>
-    <div class="legend-item"><div class="swatch" style="background:var(--accent-hotel);border-radius:50%"></div>Hotels &amp; Accommodation</div>
+  <!-- Basemap Switcher Panel -->
+  <div class="basemap-panel" id="basemap-panel">
+    <div class="basemap-title">Base Map</div>
+    <div class="basemap-grid">
+      <button class="basemap-btn active" id="bm-dark" data-bm="Dark">
+        <div class="bm-preview bm-dark"></div>
+        <span>Dark</span>
+      </button>
+      <button class="basemap-btn" id="bm-light" data-bm="Light">
+        <div class="bm-preview bm-light"></div>
+        <span>Light</span>
+      </button>
+      <button class="basemap-btn" id="bm-street" data-bm="Street">
+        <div class="bm-preview bm-street"></div>
+        <span>Street</span>
+      </button>
+      <button class="basemap-btn" id="bm-satellite" data-bm="Satellite">
+        <div class="bm-preview bm-satellite"></div>
+        <span>Satellite</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Locate Button -->
-  <button class="locate-btn" id="locate-btn" aria-label="Find my location" title="Find my location">📍</button>
+  <!-- Legend Panel (collapsible) -->
+  <div class="legend-panel" id="legend-panel">
+    <div class="legend-header" id="legend-toggle">
+      <h4>Map Legend</h4>
+      <svg class="legend-chevron" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+    </div>
+    <div class="legend-body" id="legend-body">
+      <div class="legend-item"><div class="line-swatch" style="background:var(--accent-water)"></div>Waterways</div>
+      <div class="legend-item"><div class="swatch" style="background:var(--accent-building);opacity:.6"></div>Notable Buildings</div>
+      <div class="legend-item"><div class="swatch circle" style="background:var(--accent-historic)"></div>Historic Sites</div>
+      <div class="legend-item"><div class="swatch circle" style="background:var(--accent-hotel)"></div>Hotels</div>
+      <div class="legend-item"><div class="swatch circle" style="background:var(--accent-food)"></div>Food &amp; Drink</div>
+      <div class="legend-item"><div class="swatch circle" style="background:var(--accent-art)"></div>Arts &amp; Culture</div>
+      <div class="legend-item"><div class="swatch circle" style="background:var(--accent-info)"></div>Tourism Info</div>
+    </div>
+  </div>
+
+  <!-- Right Controls -->
+  <div class="right-controls">
+    <button class="ctrl-btn" id="locate-btn" aria-label="Find my location" title="Find my location">📍</button>
+    <button class="ctrl-btn" id="layer-toggle-btn" aria-label="Toggle layers panel" title="Layer control">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </button>
+  </div>
+
+  <!-- Layer Quick Toggle Panel -->
+  <div class="layer-panel" id="layer-panel">
+    <div class="layer-panel-title">Map Layers</div>
+    <label class="layer-toggle-item" id="lt-waterway">
+      <input type="checkbox" checked data-layer="waterway"> <span class="lt-dot" style="background:var(--accent-water)"></span> 🌊 Waterways
+    </label>
+    <label class="layer-toggle-item" id="lt-building">
+      <input type="checkbox" checked data-layer="building"> <span class="lt-dot" style="background:var(--accent-building)"></span> 🏢 Buildings
+    </label>
+    <label class="layer-toggle-item" id="lt-historic">
+      <input type="checkbox" checked data-layer="historic"> <span class="lt-dot" style="background:var(--accent-historic)"></span> 🏛️ Historic
+    </label>
+    <label class="layer-toggle-item" id="lt-hotel">
+      <input type="checkbox" checked data-layer="hotel"> <span class="lt-dot" style="background:var(--accent-hotel)"></span> 🏨 Hotels
+    </label>
+    <label class="layer-toggle-item" id="lt-food">
+      <input type="checkbox" data-layer="food"> <span class="lt-dot" style="background:var(--accent-food)"></span> 🍽️ Food &amp; Drink
+    </label>
+    <label class="layer-toggle-item" id="lt-art">
+      <input type="checkbox" data-layer="art"> <span class="lt-dot" style="background:var(--accent-art)"></span> 🎨 Arts &amp; Culture
+    </label>
+    <label class="layer-toggle-item" id="lt-info">
+      <input type="checkbox" data-layer="info"> <span class="lt-dot" style="background:var(--accent-info)"></span> ℹ️ Tourism Info
+    </label>
+  </div>
 
   <!-- Toast Container -->
   <div class="toast-container" id="toast-container"></div>
@@ -88,6 +165,7 @@
 
   <!-- Scripts -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

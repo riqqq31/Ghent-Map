@@ -1,6 +1,6 @@
 /* ============================================================
-   Ghent Explorer — Application Logic
-   Leaflet map, data loading, sidebar, search, geolocation
+   Ghent Explorer — Application Logic v2
+   Basemaps, clustering, layer panel, sidebar, search, geolocation
    ============================================================ */
 
 // ---- Utilities ----
@@ -23,7 +23,6 @@ function showToast(message, type = 'info', duration = 4000) {
 const loadingOverlay = document.getElementById('loading-overlay');
 const loadingBarFill = document.getElementById('loading-bar-fill');
 const loadingText = document.getElementById('loading-text');
-
 function setLoadingProgress(percent, text) {
   loadingBarFill.style.width = percent + '%';
   if (text) loadingText.textContent = text;
@@ -33,49 +32,101 @@ function hideLoading() {
   setTimeout(() => loadingOverlay.classList.add('hidden'), 400);
 }
 
-// ---- Map Initialization ----
-const map = L.map('map', { zoomControl: false }).setView([51.0543, 3.7174], 13);
+// ---- Basemaps ----
+const basemaps = {
+  Dark:      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',      { attribution: '&copy; <a href="https://carto.com/">CARTO</a>', subdomains: 'abcd', maxZoom: 20 }),
+  Light:     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',     { attribution: '&copy; <a href="https://carto.com/">CARTO</a>', subdomains: 'abcd', maxZoom: 20 }),
+  Street:    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',                  { attribution: '&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>', maxZoom: 19 }),
+  Satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri', maxZoom: 19 })
+};
+let activeBasemap = basemaps.Dark;
+
+// ---- Map Init ----
+const map = L.map('map', { zoomControl: false, layers: [activeBasemap] }).setView([51.0543, 3.7174], 13);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-  subdomains: 'abcd',
-  maxZoom: 20
-}).addTo(map);
+
+// ---- Basemap Switcher UI ----
+document.querySelectorAll('.basemap-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const name = btn.dataset.bm;
+    if (!basemaps[name] || basemaps[name] === activeBasemap) return;
+    map.removeLayer(activeBasemap);
+    activeBasemap = basemaps[name];
+    map.addLayer(activeBasemap);
+    activeBasemap.bringToBack();
+    document.querySelectorAll('.basemap-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// ---- Stats Bar Toggle ----
+const statsBar = document.getElementById('stats-bar');
+const statsBtnToggle = document.getElementById('stats-toggle-btn');
+const sidebar = document.getElementById('sidebar');
+
+function syncSidebarTop() {
+  if (statsBar.classList.contains('hidden')) {
+    sidebar.style.top = '56px';
+  } else {
+    sidebar.style.top = '100px';
+  }
+}
+statsBtnToggle.addEventListener('click', () => {
+  statsBar.classList.toggle('hidden');
+  syncSidebarTop();
+});
+
+// ---- Legend Toggle ----
+const legendPanel = document.getElementById('legend-panel');
+const legendToggle = document.getElementById('legend-toggle');
+legendToggle.addEventListener('click', () => legendPanel.classList.toggle('collapsed'));
+
+// ---- Layer Panel Toggle ----
+const layerPanel = document.getElementById('layer-panel');
+const layerToggleBtn = document.getElementById('layer-toggle-btn');
+layerToggleBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  layerPanel.classList.toggle('show');
+});
+document.addEventListener('click', (e) => {
+  if (!layerPanel.contains(e.target) && e.target !== layerToggleBtn) {
+    layerPanel.classList.remove('show');
+  }
+});
 
 // ---- Sidebar ----
-const sidebar = document.getElementById('sidebar');
 const sbBody = document.getElementById('sb-body');
 document.getElementById('sb-close').onclick = () => sidebar.classList.remove('open');
-
-// Close sidebar on Escape key
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') sidebar.classList.remove('open');
-});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') sidebar.classList.remove('open'); });
 
 // ---- Icons & Colors ----
 const ICONS = {
-  waterway: '🌊', building: '🏢', historic: '🏛️', hotel: '🏨',
-  castle: '🏰', church: '⛪', monastery: '🕌', cathedral: '⛪', monument: '🗿',
-  memorial: '🪦', fort: '🏰', tower: '🗼', windmill: '🌬️', ruins: '🏚️',
-  bridge: '🌉', cannon: '💣', tomb: '⚰️', chapel: '⛪', prison: '🔒',
-  hospital: '🏥', school: '🎓', cinema: '🎬', farm: '🌾', warehouse: '📦',
-  guest_house: '🏡', hostel: '🛏️', motel: '🏩', apartment: '🏢'
+  waterway:'🌊', building:'🏢', historic:'🏛️', hotel:'🏨',
+  castle:'🏰', church:'⛪', monastery:'🕌', cathedral:'⛪', monument:'🗿',
+  memorial:'🪦', fort:'🏰', tower:'🗼', windmill:'🌬️', ruins:'🏚️',
+  bridge:'🌉', chapel:'⛪', prison:'🔒', hospital:'🏥', school:'🎓',
+  guest_house:'🏡', hostel:'🛏️', apartment:'🏢',
+  restaurant:'🍽️', cafe:'☕', fast_food:'🍔', bar:'🍺', pub:'🍻',
+  artwork:'🎭', museum:'🖼️', gallery:'🖼️', information:'ℹ️', viewpoint:'🔭', picnic_site:'🍱',
+  food:'🍽️', art:'🎨', info:'ℹ️'
 };
 const getIcon = (cat, type) => ICONS[type] || ICONS[cat] || '📍';
 
 const COLORS = {
-  waterway: { bg: 'rgba(0,212,255,0.12)', border: 'rgba(0,212,255,0.3)', text: 'var(--accent-water)' },
-  building: { bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)', text: 'var(--accent-building)' },
-  historic: { bg: 'rgba(251,191,36,0.12)', border: 'rgba(251,191,36,0.3)', text: 'var(--accent-historic)' },
-  hotel:    { bg: 'rgba(244,114,182,0.12)', border: 'rgba(244,114,182,0.3)', text: 'var(--accent-hotel)' }
+  waterway: { bg:'rgba(0,212,255,0.12)',    border:'rgba(0,212,255,0.3)',    text:'var(--accent-water)' },
+  building: { bg:'rgba(167,139,250,0.12)',  border:'rgba(167,139,250,0.3)',  text:'var(--accent-building)' },
+  historic: { bg:'rgba(251,191,36,0.12)',   border:'rgba(251,191,36,0.3)',   text:'var(--accent-historic)' },
+  hotel:    { bg:'rgba(244,114,182,0.12)',  border:'rgba(244,114,182,0.3)',  text:'var(--accent-hotel)' },
+  food:     { bg:'rgba(16,185,129,0.12)',   border:'rgba(16,185,129,0.3)',   text:'var(--accent-food)' },
+  art:      { bg:'rgba(249,115,22,0.12)',   border:'rgba(249,115,22,0.3)',   text:'var(--accent-art)' },
+  info:     { bg:'rgba(59,130,246,0.12)',   border:'rgba(59,130,246,0.3)',   text:'var(--accent-info)' }
 };
 
 // ---- Wikipedia Fetch ----
 async function fetchWiki(name) {
-  if (!name || name === 'Unknown' || name === 'Unnamed Feature') return null;
+  if (!name || name === 'Unnamed Feature') return null;
   try {
-    const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`;
-    let res = await fetch(url);
+    let res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
     if (!res.ok) {
       const q = encodeURIComponent(name + ' Ghent Belgium');
       const sr = await (await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${q}&format=json&origin=*&srlimit=1`)).json();
@@ -84,65 +135,54 @@ async function fetchWiki(name) {
       if (!res.ok) return null;
     }
     return await res.json();
-  } catch (e) {
-    console.warn('Wikipedia fetch failed:', e);
-    return null;
-  }
+  } catch { return null; }
 }
 
 // ---- Open Sidebar ----
 function openSidebar(props, category, latlng) {
   const name = props.name || 'Unnamed Feature';
-  const type = props[category] || props.tourism || props.building || 'unknown';
-  const c = COLORS[category];
+  const type = props[category] || props.amenity || props.tourism || props.building || 'unknown';
+  const c = COLORS[category] || COLORS.historic;
 
-  // Header
   document.getElementById('sb-icon').textContent = getIcon(category, type);
   document.getElementById('sb-icon').style.cssText = `background:${c.bg};border:1px solid ${c.border}`;
   document.getElementById('sb-title').textContent = name;
   const badge = document.getElementById('sb-badge');
   badge.textContent = cap(type);
   badge.style.cssText = `background:${c.bg};color:${c.text};border:1px solid ${c.border}`;
-  const starsEl = document.getElementById('sb-stars');
-  starsEl.innerHTML = props.stars ? '<div class="stars">' + '★'.repeat(parseInt(props.stars)) + '</div>' : '';
+  document.getElementById('sb-stars').innerHTML = props.stars ? '<div class="stars">' + '★'.repeat(+props.stars) + '</div>' : '';
 
-  // Properties
   let html = '<div class="info-section"><h3>Properties</h3><div class="info-grid">';
   html += `<div class="info-card"><div class="label">Category</div><div class="value">${cap(category)}</div></div>`;
   html += `<div class="info-card"><div class="label">Type</div><div class="value">${cap(type)}</div></div>`;
-  if (props.addr_street) html += `<div class="info-card"><div class="label">Street</div><div class="value">${props.addr_street}</div></div>`;
-  if (props.addr_housenumber) html += `<div class="info-card"><div class="label">Number</div><div class="value">${props.addr_housenumber}</div></div>`;
-  if (props.operator) html += `<div class="info-card"><div class="label">Operator</div><div class="value">${props.operator}</div></div>`;
-  if (props.rooms) html += `<div class="info-card"><div class="label">Rooms</div><div class="value">${props.rooms}</div></div>`;
+  if (props.addr_street)    html += `<div class="info-card"><div class="label">Street</div><div class="value">${props.addr_street}</div></div>`;
+  if (props.addr_housenumber) html += `<div class="info-card"><div class="label">No.</div><div class="value">${props.addr_housenumber}</div></div>`;
+  if (props.operator)       html += `<div class="info-card"><div class="label">Operator</div><div class="value">${props.operator}</div></div>`;
+  if (props.cuisine)        html += `<div class="info-card"><div class="label">Cuisine</div><div class="value">${cap(props.cuisine)}</div></div>`;
+  if (props.rooms)          html += `<div class="info-card"><div class="label">Rooms</div><div class="value">${props.rooms}</div></div>`;
   if (props.internet_access) html += `<div class="info-card"><div class="label">WiFi</div><div class="value">${cap(props.internet_access)}</div></div>`;
-  if (props.wheelchair) html += `<div class="info-card"><div class="label">Wheelchair</div><div class="value">${cap(props.wheelchair)}</div></div>`;
-  if (props.surface) html += `<div class="info-card"><div class="label">Surface</div><div class="value">${cap(props.surface)}</div></div>`;
-  if (props.width) html += `<div class="info-card"><div class="label">Width</div><div class="value">${props.width}m</div></div>`;
-  if (props.building_material) html += `<div class="info-card"><div class="label">Material</div><div class="value">${cap(props.building_material)}</div></div>`;
-  if (props.amenity) html += `<div class="info-card"><div class="label">Amenity</div><div class="value">${cap(props.amenity)}</div></div>`;
+  if (props.wheelchair)     html += `<div class="info-card"><div class="label">Wheelchair</div><div class="value">${cap(props.wheelchair)}</div></div>`;
   if (latlng) html += `<div class="info-card full"><div class="label">Coordinates</div><div class="value">${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}</div></div>`;
   html += '</div></div>';
 
-  // Hotel-specific actions
-  if (category === 'hotel') {
+  if (props.website || props.phone || props.email) {
     html += '<div class="hotel-actions">';
     if (props.website) html += `<a class="hotel-web" href="${props.website}" target="_blank">🌐 Visit Website</a>`;
-    if (props.phone) html += `<a class="hotel-phone" href="tel:${props.phone}">📞 ${props.phone}</a>`;
-    if (props.email) html += `<a class="hotel-email" href="mailto:${props.email}">✉️ ${props.email}</a>`;
+    if (props.phone)   html += `<a class="hotel-phone" href="tel:${props.phone}">📞 ${props.phone}</a>`;
+    if (props.email)   html += `<a class="hotel-email" href="mailto:${props.email}">✉️ ${props.email}</a>`;
     html += '</div>';
   }
 
-  // OSM Link
   const osmType = props.osm_type === 'nodes' || props.osm_type === 'node' ? 'node' :
-    (props.osm_type === 'ways_line' || props.osm_type === 'ways_poly' || props.osm_type === 'way' ? 'way' : 'relation');
+    (props.osm_type?.includes('way') ? 'way' : 'relation');
   html += `<a class="osm-link" href="https://www.openstreetmap.org/${osmType}/${props.osm_id}" target="_blank">🔗 View on OpenStreetMap</a>`;
   html += '<div id="wiki-area" style="margin-top:20px"></div>';
 
   sbBody.innerHTML = html;
   sidebar.classList.add('open');
+  syncSidebarTop();
 
-  // Wikipedia lookup
-  if (name && name !== 'Unnamed Feature') {
+  if (name !== 'Unnamed Feature') {
     const wa = document.getElementById('wiki-area');
     wa.innerHTML = '<div class="wiki-loading"><div class="spinner"></div>Searching Wikipedia...</div>';
     fetchWiki(name).then(data => {
@@ -167,45 +207,24 @@ function onEach(category) {
       openSidebar(props, category, ll);
     });
     layer.on('mouseover', function (e) {
-      const l = e.target;
-      if (l.setStyle) l.setStyle({ weight: (l.options.weight || 2) + 2, fillOpacity: .85 });
+      if (e.target.setStyle) e.target.setStyle({ weight: (e.target.options.weight || 2) + 2, fillOpacity: .85 });
     });
     layer.on('mouseout', function (e) {
-      const ref = { waterway: waterwayLayer, building: buildingLayer, historic: historicLayer, hotel: hotelLayer }[category];
+      const ref = layerMap[category];
       if (ref && ref.resetStyle) ref.resetStyle(e.target);
     });
   };
 }
 
-// ---- Custom DivIcon Factories ----
-function createHistoricIcon(feature) {
-  const type = feature.properties.historic || 'historic';
-  const emoji = getIcon('historic', type);
-  return L.divIcon({
-    className: '',
-    html: `<div class="custom-marker marker-historic">${emoji}</div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15]
-  });
-}
-function createHotelIcon(feature) {
-  const type = feature.properties.tourism || 'hotel';
-  const emoji = getIcon('hotel', type);
-  return L.divIcon({
-    className: '',
-    html: `<div class="custom-marker marker-hotel">${emoji}</div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16]
-  });
+// ---- DivIcon Factory ----
+function createCustomIcon(feature, category, typeKey, cssClass) {
+  const emoji = getIcon(category, feature.properties[typeKey] || category);
+  return L.divIcon({ className: '', html: `<div class="custom-marker ${cssClass}">${emoji}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
 }
 
 // ---- GeoJSON Layers ----
 const waterwayLayer = L.geoJSON(null, {
-  style: f => ({
-    color: '#00d4ff',
-    weight: f.properties.waterway === 'river' ? 4 : f.properties.waterway === 'canal' ? 3 : 2,
-    opacity: .85
-  }),
+  style: f => ({ color: '#00d4ff', weight: f.properties.waterway === 'river' ? 4 : f.properties.waterway === 'canal' ? 3 : 2, opacity: .85 }),
   onEachFeature: onEach('waterway')
 });
 const buildingLayer = L.geoJSON(null, {
@@ -214,159 +233,133 @@ const buildingLayer = L.geoJSON(null, {
 });
 const historicLayer = L.geoJSON(null, {
   style: { fillColor: '#fbbf24', fillOpacity: .6, color: '#f59e0b', weight: 2, opacity: 1 },
-  pointToLayer: (f, ll) => L.marker(ll, { icon: createHistoricIcon(f) }),
+  pointToLayer: (f, ll) => L.marker(ll, { icon: createCustomIcon(f, 'historic', 'historic', 'marker-historic') }),
   onEachFeature: onEach('historic')
 });
 const hotelLayer = L.geoJSON(null, {
   style: { fillColor: '#f472b6', fillOpacity: .5, color: '#ec4899', weight: 2, opacity: 1 },
-  pointToLayer: (f, ll) => L.marker(ll, { icon: createHotelIcon(f) }),
+  pointToLayer: (f, ll) => L.marker(ll, { icon: createCustomIcon(f, 'hotel', 'tourism', 'marker-hotel') }),
   onEachFeature: onEach('hotel')
 });
 
-// ---- Search Feature ----
+// ---- Clustered Layers ----
+function makeCluster(color) {
+  return L.markerClusterGroup({
+    showCoverageOnHover: false,
+    maxClusterRadius: 50,
+    iconCreateFunction: cluster => L.divIcon({
+      html: `<div style="background:${color};border:2px solid #fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.4)">${cluster.getChildCount()}</div>`,
+      className: '', iconSize: [34, 34], iconAnchor: [17, 17]
+    })
+  });
+}
+const foodCluster = makeCluster('#10b981');
+const artCluster  = makeCluster('#f97316');
+const infoCluster = makeCluster('#3b82f6');
+
+const foodGeoLayer = L.geoJSON(null, {
+  pointToLayer: (f, ll) => L.marker(ll, { icon: createCustomIcon(f, 'food', 'amenity', 'marker-food') }),
+  onEachFeature: onEach('food')
+});
+const artGeoLayer = L.geoJSON(null, {
+  pointToLayer: (f, ll) => L.marker(ll, { icon: createCustomIcon(f, 'art', 'tourism', 'marker-art') }),
+  onEachFeature: onEach('art')
+});
+const infoGeoLayer = L.geoJSON(null, {
+  pointToLayer: (f, ll) => L.marker(ll, { icon: createCustomIcon(f, 'info', 'tourism', 'marker-info') }),
+  onEachFeature: onEach('info')
+});
+
+// Layer map for mouseout reset
+const layerMap = { waterway: waterwayLayer, building: buildingLayer, historic: historicLayer, hotel: hotelLayer, food: foodGeoLayer, art: artGeoLayer, info: infoGeoLayer };
+
+// ---- Layer Panel Checkboxes ----
+function wireLayerToggles() {
+  document.querySelectorAll('.layer-toggle-item input').forEach(cb => {
+    const layerName = cb.dataset.layer;
+    const layerOrCluster = { waterway: waterwayLayer, building: buildingLayer, historic: historicLayer, hotel: hotelLayer, food: foodCluster, art: artCluster, info: infoCluster }[layerName];
+    if (!layerOrCluster) return;
+    cb.addEventListener('change', () => {
+      if (cb.checked) { map.addLayer(layerOrCluster); }
+      else { map.removeLayer(layerOrCluster); }
+    });
+  });
+}
+
+// ---- Search ----
 const searchInput = document.getElementById('search-input');
 const searchResults = document.getElementById('search-results');
-let allFeatures = []; // collected after loading
+let allFeatures = [];
 
-function populateSearchIndex(waterways, buildings, historic, hotels) {
+function populateSearchIndex(layersData) {
   allFeatures = [];
-  const addFeatures = (geojson, category) => {
-    if (!geojson.features) return;
-    geojson.features.forEach(f => {
+  layersData.forEach(({ data, category }) => {
+    if (!data.features) return;
+    data.features.forEach(f => {
       if (f.properties.name) {
         const center = getFeatureCenter(f);
-        if (center) {
-          allFeatures.push({
-            name: f.properties.name,
-            category,
-            properties: f.properties,
-            center
-          });
-        }
-      }
-    });
-  };
-  addFeatures(waterways, 'waterway');
-  addFeatures(buildings, 'building');
-  addFeatures(historic, 'historic');
-  addFeatures(hotels, 'hotel');
-}
-
-function getFeatureCenter(feature) {
-  const geom = feature.geometry;
-  if (!geom) return null;
-  if (geom.type === 'Point') return { lat: geom.coordinates[1], lng: geom.coordinates[0] };
-  if (geom.type === 'MultiPoint' && geom.coordinates.length) return { lat: geom.coordinates[0][1], lng: geom.coordinates[0][0] };
-  if (geom.type === 'LineString' && geom.coordinates.length) {
-    const mid = geom.coordinates[Math.floor(geom.coordinates.length / 2)];
-    return { lat: mid[1], lng: mid[0] };
-  }
-  if (geom.type === 'MultiLineString' && geom.coordinates.length) {
-    const line = geom.coordinates[0];
-    const mid = line[Math.floor(line.length / 2)];
-    return { lat: mid[1], lng: mid[0] };
-  }
-  if (geom.type === 'Polygon' && geom.coordinates.length) {
-    const ring = geom.coordinates[0];
-    let latS = 0, lngS = 0;
-    ring.forEach(c => { latS += c[1]; lngS += c[0]; });
-    return { lat: latS / ring.length, lng: lngS / ring.length };
-  }
-  if (geom.type === 'MultiPolygon' && geom.coordinates.length) {
-    const ring = geom.coordinates[0][0];
-    let latS = 0, lngS = 0;
-    ring.forEach(c => { latS += c[1]; lngS += c[0]; });
-    return { lat: latS / ring.length, lng: lngS / ring.length };
-  }
-  return null;
-}
-
-let searchDebounce = null;
-searchInput.addEventListener('input', function () {
-  clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(() => performSearch(this.value.trim()), 200);
-});
-searchInput.addEventListener('focus', function () {
-  if (this.value.trim().length >= 2) performSearch(this.value.trim());
-});
-document.addEventListener('click', function (e) {
-  if (!e.target.closest('.search-container')) {
-    searchResults.classList.remove('active');
-  }
-});
-
-function performSearch(query) {
-  if (query.length < 2) {
-    searchResults.classList.remove('active');
-    return;
-  }
-  const q = query.toLowerCase();
-  const matches = allFeatures
-    .filter(f => f.name.toLowerCase().includes(q))
-    .slice(0, 12);
-
-  if (matches.length === 0) {
-    searchResults.innerHTML = '<div class="search-no-results">No results found</div>';
-    searchResults.classList.add('active');
-    return;
-  }
-
-  searchResults.innerHTML = matches.map(m => {
-    const c = COLORS[m.category];
-    return `<div class="search-result-item" data-lat="${m.center.lat}" data-lng="${m.center.lng}" data-category="${m.category}">
-      <span class="sr-icon">${getIcon(m.category, m.properties[m.category] || '')}</span>
-      <span class="sr-name">${m.name}</span>
-      <span class="sr-cat" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${cap(m.category)}</span>
-    </div>`;
-  }).join('');
-  searchResults.classList.add('active');
-
-  // Attach click events
-  searchResults.querySelectorAll('.search-result-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const lat = parseFloat(item.dataset.lat);
-      const lng = parseFloat(item.dataset.lng);
-      const cat = item.dataset.category;
-      map.flyTo([lat, lng], 17, { duration: 1.2 });
-      searchResults.classList.remove('active');
-      searchInput.value = item.querySelector('.sr-name').textContent;
-
-      // Find the matching feature and open sidebar
-      const match = allFeatures.find(f => f.center.lat === lat && f.center.lng === lng);
-      if (match) {
-        setTimeout(() => openSidebar(match.properties, cat, { lat, lng }), 600);
+        if (center) allFeatures.push({ name: f.properties.name, category, properties: f.properties, center });
       }
     });
   });
 }
 
-// ---- Geolocation (Locate Me) ----
+function getFeatureCenter(feature) {
+  const g = feature.geometry;
+  if (!g) return null;
+  if (g.type === 'Point') return { lat: g.coordinates[1], lng: g.coordinates[0] };
+  if (g.type === 'LineString' && g.coordinates.length) { const m = g.coordinates[Math.floor(g.coordinates.length/2)]; return { lat: m[1], lng: m[0] }; }
+  if (g.type === 'Polygon' && g.coordinates.length) { const r = g.coordinates[0]; let la=0,ln=0; r.forEach(c=>{la+=c[1];ln+=c[0];}); return {lat:la/r.length,lng:ln/r.length}; }
+  if (g.type === 'MultiPolygon' && g.coordinates.length) { const r = g.coordinates[0][0]; let la=0,ln=0; r.forEach(c=>{la+=c[1];ln+=c[0];}); return {lat:la/r.length,lng:ln/r.length}; }
+  if (g.type === 'MultiLineString' && g.coordinates.length) { const l=g.coordinates[0]; const m=l[Math.floor(l.length/2)]; return {lat:m[1],lng:m[0]}; }
+  return null;
+}
+
+let searchDebounce = null;
+searchInput.addEventListener('input', function() { clearTimeout(searchDebounce); searchDebounce = setTimeout(() => performSearch(this.value.trim()), 200); });
+searchInput.addEventListener('focus', function() { if (this.value.trim().length >= 2) performSearch(this.value.trim()); });
+document.addEventListener('click', e => { if (!e.target.closest('.search-container')) searchResults.classList.remove('active'); });
+
+function performSearch(query) {
+  if (query.length < 2) { searchResults.classList.remove('active'); return; }
+  const q = query.toLowerCase();
+  const matches = allFeatures.filter(f => f.name.toLowerCase().includes(q)).slice(0, 12);
+  if (!matches.length) { searchResults.innerHTML = '<div class="search-no-results">No results found</div>'; searchResults.classList.add('active'); return; }
+  searchResults.innerHTML = matches.map(m => {
+    const c = COLORS[m.category] || COLORS.historic;
+    const typeKey = m.properties.amenity || m.properties.tourism || '';
+    return `<div class="search-result-item" data-lat="${m.center.lat}" data-lng="${m.center.lng}" data-category="${m.category}">
+      <span class="sr-icon">${getIcon(m.category, typeKey)}</span>
+      <span class="sr-name">${m.name}</span>
+      <span class="sr-cat" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${cap(m.category)}</span>
+    </div>`;
+  }).join('');
+  searchResults.classList.add('active');
+  searchResults.querySelectorAll('.search-result-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const lat = parseFloat(item.dataset.lat), lng = parseFloat(item.dataset.lng), cat = item.dataset.category;
+      map.flyTo([lat, lng], 17, { duration: 1.2 });
+      searchResults.classList.remove('active');
+      searchInput.value = item.querySelector('.sr-name').textContent;
+      const match = allFeatures.find(f => f.center.lat === lat && f.center.lng === lng);
+      if (match) setTimeout(() => openSidebar(match.properties, cat, { lat, lng }), 600);
+    });
+  });
+}
+
+// ---- Geolocation ----
 const locateBtn = document.getElementById('locate-btn');
 locateBtn.addEventListener('click', () => {
-  if (!navigator.geolocation) {
-    showToast('Geolocation is not supported by your browser', 'error');
-    return;
-  }
+  if (!navigator.geolocation) { showToast('Geolocation not supported', 'error'); return; }
   locateBtn.classList.add('locating');
   navigator.geolocation.getCurrentPosition(
     pos => {
-      const { latitude, longitude } = pos.coords;
-      map.flyTo([latitude, longitude], 16, { duration: 1.5 });
-      L.circleMarker([latitude, longitude], {
-        radius: 8,
-        fillColor: '#6366f1',
-        fillOpacity: 1,
-        color: '#fff',
-        weight: 3
-      }).addTo(map).bindPopup('<b>Your Location</b>').openPopup();
+      map.flyTo([pos.coords.latitude, pos.coords.longitude], 16, { duration: 1.5 });
+      L.circleMarker([pos.coords.latitude, pos.coords.longitude], { radius: 8, fillColor: '#6366f1', fillOpacity: 1, color: '#fff', weight: 3 }).addTo(map).bindPopup('<b>Your Location</b>').openPopup();
       locateBtn.classList.remove('locating');
       showToast('Location found!', 'success');
     },
-    err => {
-      locateBtn.classList.remove('locating');
-      showToast('Unable to get your location', 'error');
-      console.warn('Geolocation error:', err);
-    },
+    () => { locateBtn.classList.remove('locating'); showToast('Unable to get location', 'error'); },
     { enableHighAccuracy: true, timeout: 10000 }
   );
 });
@@ -375,72 +368,89 @@ locateBtn.addEventListener('click', () => {
 async function loadAllData() {
   try {
     setLoadingProgress(10, 'Loading waterways...');
-    const wRes = await fetch('./data/ghent_waterways.geojson');
-    if (!wRes.ok) throw new Error('Failed to load waterways');
-    const w = await wRes.json();
-    setLoadingProgress(30, 'Loading buildings...');
+    const w = await (await fetch('./data/ghent_waterways.geojson')).json();
+    setLoadingProgress(25, 'Loading buildings...');
+    const b = await (await fetch('./data/ghent_buildings.geojson')).json();
+    setLoadingProgress(40, 'Loading historic sites...');
+    const h = await (await fetch('./data/ghent_historic.geojson')).json();
+    setLoadingProgress(55, 'Loading hotels...');
+    const ho = await (await fetch('./data/ghent_hotels.geojson')).json();
+    setLoadingProgress(70, 'Loading additional data...');
+    const t = await (await fetch('./tambahan_geojson_uid_19270ad4-e1fc-43a9-aa49-bb7963106727/tambahan.geojson')).json();
 
-    const bRes = await fetch('./data/ghent_buildings.geojson');
-    if (!bRes.ok) throw new Error('Failed to load buildings');
-    const b = await bRes.json();
-    setLoadingProgress(50, 'Loading historic sites...');
+    // Filter tambahan
+    const foodGeoJSON = { type: 'FeatureCollection', features: [] };
+    const artGeoJSON  = { type: 'FeatureCollection', features: [] };
+    const infoGeoJSON = { type: 'FeatureCollection', features: [] };
+    const foodTypes = new Set(['restaurant','fast_food','cafe','pub','bar']);
+    const artTypes  = new Set(['artwork','museum','gallery']);
+    const infoTypes = new Set(['information','viewpoint','picnic_site']);
 
-    const hRes = await fetch('./data/ghent_historic.geojson');
-    if (!hRes.ok) throw new Error('Failed to load historic sites');
-    const h = await hRes.json();
-    setLoadingProgress(70, 'Loading hotels...');
+    t.features.forEach(f => {
+      if (foodTypes.has(f.properties.amenity))  foodGeoJSON.features.push(f);
+      else if (artTypes.has(f.properties.tourism))  artGeoJSON.features.push(f);
+      else if (infoTypes.has(f.properties.tourism)) infoGeoJSON.features.push(f);
+    });
 
-    const hoRes = await fetch('./data/ghent_hotels.geojson');
-    if (!hoRes.ok) throw new Error('Failed to load hotels');
-    const ho = await hoRes.json();
     setLoadingProgress(85, 'Rendering layers...');
 
-    // Add data to layers
     waterwayLayer.addData(w);
     buildingLayer.addData(b);
     historicLayer.addData(h);
     hotelLayer.addData(ho);
+    foodGeoLayer.addData(foodGeoJSON);
+    artGeoLayer.addData(artGeoJSON);
+    infoGeoLayer.addData(infoGeoJSON);
 
-    // Add layers to map
+    // Add clustered data
+    foodCluster.addLayer(foodGeoLayer);
+    artCluster.addLayer(artGeoLayer);
+    infoCluster.addLayer(infoGeoLayer);
+
+    // Default visible layers
     buildingLayer.addTo(map);
     historicLayer.addTo(map);
     waterwayLayer.addTo(map);
     hotelLayer.addTo(map);
+    // food/art/info off by default — user toggles
 
-    // Update stats
-    document.getElementById('stat-water').textContent = w.features.length;
+    // Stats
+    document.getElementById('stat-water').textContent    = w.features.length;
     document.getElementById('stat-building').textContent = b.features.length;
     document.getElementById('stat-historic').textContent = h.features.length;
-    document.getElementById('stat-hotel').textContent = ho.features.length;
+    document.getElementById('stat-hotel').textContent    = ho.features.length;
+    document.getElementById('stat-food').textContent     = foodGeoJSON.features.length;
+    document.getElementById('stat-art').textContent      = artGeoJSON.features.length;
+    document.getElementById('stat-info').textContent     = infoGeoJSON.features.length;
 
-    // Layer control
-    L.control.layers(null, {
-      '🌊 Waterways': waterwayLayer,
-      '🏢 Notable Buildings': buildingLayer,
-      '🏛️ Historic Sites': historicLayer,
-      '🏨 Hotels': hotelLayer
-    }, { position: 'topright', collapsed: true }).addTo(map);
+    // Show legend now
+    legendPanel.style.display = 'block';
 
     // Fit bounds
-    const bounds = waterwayLayer.getBounds();
-    bounds.extend(buildingLayer.getBounds());
-    bounds.extend(historicLayer.getBounds());
-    bounds.extend(hotelLayer.getBounds());
+    const bounds = waterwayLayer.getBounds().extend(buildingLayer.getBounds()).extend(historicLayer.getBounds()).extend(hotelLayer.getBounds());
     if (bounds.isValid()) map.fitBounds(bounds, { padding: [50, 80] });
 
-    // Build search index
     setLoadingProgress(95, 'Building search index...');
-    populateSearchIndex(w, b, h, ho);
+    populateSearchIndex([
+      { data: w, category: 'waterway' },
+      { data: b, category: 'building' },
+      { data: h, category: 'historic' },
+      { data: ho, category: 'hotel' },
+      { data: foodGeoJSON, category: 'food' },
+      { data: artGeoJSON, category: 'art' },
+      { data: infoGeoJSON, category: 'info' }
+    ]);
 
+    wireLayerToggles();
     hideLoading();
-    showToast(`Loaded ${w.features.length + b.features.length + h.features.length + ho.features.length} features`, 'success', 3000);
+    const total = w.features.length + b.features.length + h.features.length + ho.features.length + foodGeoJSON.features.length + artGeoJSON.features.length + infoGeoJSON.features.length;
+    showToast(`✅ ${total.toLocaleString()} features loaded`, 'success', 3500);
 
   } catch (err) {
-    console.error('Data loading error:', err);
+    console.error(err);
     hideLoading();
-    showToast('Error loading map data. Please use a local HTTP server.', 'error', 8000);
+    showToast('Error loading data. Use a local HTTP server.', 'error', 8000);
   }
 }
 
-// Start loading
 loadAllData();
