@@ -449,7 +449,7 @@ async function loadAllData() {
   } catch (err) {
     console.error(err);
     hideLoading();
-    showToast('Error loading data. Use a local HTTP server.', 'error', 8000);
+    showToast(`Error loading data: ${err.message}`, 'error', 8000);
   }
 }
 
