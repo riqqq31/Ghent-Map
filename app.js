@@ -43,7 +43,7 @@ let activeBasemap = basemaps.Dark;
 
 // ---- Map Init ----
 const map = L.map('map', { zoomControl: false, layers: [activeBasemap] }).setView([51.0543, 3.7174], 13);
-L.control.zoom({ position: 'bottomright' }).addTo(map);
+L.control.zoom({ position: 'topright' }).addTo(map);
 
 // ---- Basemap Switcher UI ----
 document.querySelectorAll('.basemap-btn').forEach(btn => {
@@ -96,8 +96,32 @@ document.addEventListener('click', (e) => {
 
 // ---- Sidebar ----
 const sbBody = document.getElementById('sb-body');
-document.getElementById('sb-close').onclick = () => sidebar.classList.remove('open');
-document.addEventListener('keydown', e => { if (e.key === 'Escape') sidebar.classList.remove('open'); });
+document.getElementById('sb-close').onclick = () => { sidebar.classList.remove('open'); clearActiveLayer(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { sidebar.classList.remove('open'); clearActiveLayer(); } });
+
+// ---- Active Feature Highlight ----
+let activeLayerRef = null;
+
+function clearActiveLayer() {
+  if (!activeLayerRef) return;
+  const { layer, category } = activeLayerRef;
+  if (layer.setStyle) {
+    try { if (layerMap[category]?.resetStyle) layerMap[category].resetStyle(layer); } catch(e) {}
+  }
+  const el = layer.getElement?.();
+  if (el) el.querySelector('.custom-marker')?.classList.remove('marker-active');
+  activeLayerRef = null;
+}
+
+function setActiveLayer(layer, category) {
+  clearActiveLayer();
+  activeLayerRef = { layer, category };
+  if (layer.setStyle) {
+    layer.setStyle({ weight: 3, opacity: 1, fillOpacity: 0.8, color: '#ffffff' });
+  }
+  const el = layer.getElement?.();
+  if (el) el.querySelector('.custom-marker')?.classList.add('marker-active');
+}
 
 // ---- Icons & Colors ----
 const ICONS = {
@@ -184,7 +208,13 @@ function openSidebar(props, category, latlng) {
 
   if (name !== 'Unnamed Feature') {
     const wa = document.getElementById('wiki-area');
-    wa.innerHTML = '<div class="wiki-loading"><div class="spinner"></div>Searching Wikipedia...</div>';
+    wa.innerHTML = `<div class="wiki-skeleton">
+      <div class="skel-img skeleton"></div>
+      <div class="skel-title skeleton"></div>
+      <div class="skel-line skeleton"></div>
+      <div class="skel-line skeleton" style="width:80%"></div>
+      <div class="skel-line skeleton" style="width:60%"></div>
+    </div>`;
     fetchWiki(name).then(data => {
       if (!data || data.type === 'disambiguation' || !data.extract) { wa.innerHTML = ''; return; }
       let w = '<div class="wiki-section">';
@@ -204,6 +234,7 @@ function onEach(category) {
     layer.bindTooltip(name, { sticky: true, direction: 'top', offset: [0, -8] });
     layer.on('click', function (e) {
       const ll = e.latlng || (layer.getCenter ? layer.getCenter() : layer.getLatLng());
+      setActiveLayer(e.target, category);
       openSidebar(props, category, ll);
     });
     layer.on('mouseover', function (e) {
@@ -289,7 +320,17 @@ function wireLayerToggles() {
 // ---- Search ----
 const searchInput = document.getElementById('search-input');
 const searchResults = document.getElementById('search-results');
+const searchClear = document.getElementById('search-clear');
 let allFeatures = [];
+let focusedResultIndex = -1;
+
+function highlightText(text, query) {
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return text.slice(0, idx) +
+    `<mark class="sr-highlight">${text.slice(idx, idx + query.length)}</mark>` +
+    text.slice(idx + query.length);
+}
 
 function populateSearchIndex(layersData) {
   allFeatures = [];
@@ -315,10 +356,35 @@ function getFeatureCenter(feature) {
   return null;
 }
 
+function updateSearchFocus(items) {
+  items.forEach((item, i) => item.classList.toggle('focused', i === focusedResultIndex));
+  if (items[focusedResultIndex]) items[focusedResultIndex].scrollIntoView({ block: 'nearest' });
+}
+
 let searchDebounce = null;
-searchInput.addEventListener('input', function() { clearTimeout(searchDebounce); searchDebounce = setTimeout(() => performSearch(this.value.trim()), 200); });
+searchInput.addEventListener('input', function() {
+  clearTimeout(searchDebounce);
+  const val = this.value.trim();
+  searchClear.classList.toggle('visible', val.length > 0);
+  focusedResultIndex = -1;
+  searchDebounce = setTimeout(() => performSearch(val), 200);
+});
 searchInput.addEventListener('focus', function() { if (this.value.trim().length >= 2) performSearch(this.value.trim()); });
-document.addEventListener('click', e => { if (!e.target.closest('.search-container')) searchResults.classList.remove('active'); });
+searchInput.addEventListener('keydown', function(e) {
+  const items = searchResults.querySelectorAll('.search-result-item');
+  if (!items.length) return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); focusedResultIndex = Math.min(focusedResultIndex + 1, items.length - 1); updateSearchFocus(items); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); focusedResultIndex = Math.max(focusedResultIndex - 1, 0); updateSearchFocus(items); }
+  else if (e.key === 'Enter' && focusedResultIndex >= 0) { items[focusedResultIndex]?.click(); }
+});
+searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  searchClear.classList.remove('visible');
+  searchResults.classList.remove('active');
+  focusedResultIndex = -1;
+  searchInput.focus();
+});
+document.addEventListener('click', e => { if (!e.target.closest('.search-container')) { searchResults.classList.remove('active'); focusedResultIndex = -1; } });
 
 function performSearch(query) {
   if (query.length < 2) { searchResults.classList.remove('active'); return; }
@@ -330,10 +396,11 @@ function performSearch(query) {
     const typeKey = m.properties.amenity || m.properties.tourism || '';
     return `<div class="search-result-item" data-lat="${m.center.lat}" data-lng="${m.center.lng}" data-category="${m.category}">
       <span class="sr-icon">${getIcon(m.category, typeKey)}</span>
-      <span class="sr-name">${m.name}</span>
+      <span class="sr-name">${highlightText(m.name, query)}</span>
       <span class="sr-cat" style="background:${c.bg};color:${c.text};border:1px solid ${c.border}">${cap(m.category)}</span>
     </div>`;
   }).join('');
+  focusedResultIndex = -1;
   searchResults.classList.add('active');
   searchResults.querySelectorAll('.search-result-item').forEach(item => {
     item.addEventListener('click', () => {
